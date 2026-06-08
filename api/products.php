@@ -63,7 +63,33 @@ switch ($method) {
             echo json_encode(["message" => "Nie udało się usunąć produktu."]);
         }
         break;
-        
+    case 'PUT':
+        // EDYCJA PRODUKTU PRZEZ ADMINA
+        $data = json_decode(file_get_contents("php://input"), true);
+
+        if (empty($data['id']) || empty($data['name']) || empty($data['sku']) || !isset($data['price']) || !isset($data['stock']) || empty($data['category'])) {
+            http_response_code(400);
+            echo json_encode(["message" => "Wszystkie pola są wymagane do edycji!"]);
+            break;
+        }
+
+        $query = "UPDATE products SET name = :name, sku = :sku, price = :price, stock = :stock, category = :category WHERE id = :id";
+        $stmt = $conn->prepare($query);
+
+        $stmt->bindParam(":id", $data['id']);
+        $stmt->bindParam(":name", $data['name']);
+        $stmt->bindParam(":sku", $data['sku']);
+        $stmt->bindParam(":price", $data['price']);
+        $stmt->bindParam(":stock", $data['stock']);
+        $stmt->bindParam(":category", $data['category']);
+
+        if ($stmt->execute()) {
+            echo json_encode(["message" => "Produkt został zaktualizowany przez Administratora."]);
+        } else {
+            http_response_code(500);
+            echo json_encode(["message" => "Nie udało się zaktualizować produktu."]);
+        }
+        break;
     default:
         http_response_code(405);
         echo json_encode(["message" => "Metoda niedozwolona."]);

@@ -5,12 +5,12 @@ let authAction = 'login';
 
 let localProducts = [];
 let currentInvoiceItems = [];
-let currentSort = { field: '', asc: true };
 
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
     document.getElementById('loginForm').addEventListener('submit', handleAuth);
     document.getElementById('invoiceForm').addEventListener('submit', handleInvoiceSubmit);
+    document.getElementById('editForm').addEventListener('submit', handleEditSubmit);
 });
 
 function setAuthAction(action) { authAction = action; }
@@ -36,7 +36,9 @@ function initApp() {
     }
 }
 
-// LOGOWANIE / REJESTRACJA
+// ==========================================
+// 1. SYSTEM AUTORYZACJI (LOGOWANIE / REJESTRACJA)
+// ==========================================
 async function handleAuth(e) {
     e.preventDefault();
     const username = document.getElementById('authUsername').value;
@@ -48,9 +50,7 @@ async function handleAuth(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
-        
-        const result = await response.json(); // Czyste parsowanie JSON
-
+        const result = await response.json();
         alert(result.message);
 
         if (response.ok && authAction === 'login') {
@@ -59,9 +59,7 @@ async function handleAuth(e) {
             document.getElementById('loginForm').reset();
             initApp();
         }
-    } catch (err) {
-        console.error(err);
-    }
+    } catch (err) { console.error(err); }
 }
 
 function logout() {
@@ -70,16 +68,16 @@ function logout() {
     initApp();
 }
 
-// POBIERANIE DOSTĘPNOŚCI TOWARÓW
+// ==========================================
+// 2. OBSŁUGA MAGAZYNU (PRODUKTY)
+// ==========================================
 async function fetchProducts() {
     try {
         const response = await fetch(`${BASE_URL}/products.php`);
         localProducts = await response.json();
         renderProductsTable(localProducts);
         populateProductSelect(localProducts);
-    } catch (err) {
-        console.error(err);
-    }
+    } catch (err) { console.error(err); }
 }
 
 function renderProductsTable(products) {
@@ -87,6 +85,11 @@ function renderProductsTable(products) {
     tbody.innerHTML = '';
     products.forEach(p => {
         const row = document.createElement('tr');
+        
+        const adminActions = currentUser && currentUser.role === 'admin' 
+            ? `<button onclick="openEditModal(${p.id})" class="text-blue-600 hover:text-blue-900 font-bold mr-2 cursor-pointer">Edytuj</button>` 
+            : `<span class="text-gray-400 text-xs">Brak uprawnień</span>`;
+
         row.innerHTML = `
             <td class="px-4 py-3 font-mono text-xs">${p.sku}</td>
             <td class="px-4 py-3 font-medium">${p.name}</td>
@@ -94,40 +97,185 @@ function renderProductsTable(products) {
             <td class="px-4 py-3 font-bold">${parseFloat(p.price).toFixed(2)} PLN</td>
             <td class="px-4 py-3">
                 <span class="px-2 py-0.5 rounded text-xs font-bold ${p.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                    ${p.stock} szt. ${p.stock == 0 ? '(BRAK)' : ''}
+                    ${p.stock} szt.
                 </span>
             </td>
+            <td class="px-4 py-3 text-right">${adminActions}</td>
         `;
         tbody.appendChild(row);
     });
 }
 
+// ==========================================
+// 3. EDYCJA PRODUKTÓW (MODAL DLA ADMINA)
+// ==========================================
+function openEditModal(productId) {
+    const product = localProducts.find(p => p.id == productId);
+    if (!product) return;
+
+    document.getElementById('editId').value = product.id;
+    document.getElementById('editName').value = product.name;
+    document.getElementById('editSku').value = product.sku;
+    document.getElementById('editCategory').value = product.category;
+    document.getElementById('editPrice').value = product.price;
+    document.getElementById('editStock').value = product.stock;
+
+    document.getElementById('editModal').classList.remove('hidden');
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+}
+
+async function handleEditSubmit(e) {
+    e.preventDefault();
+
+    const updatedData = {
+        id: document.getElementById('editId').value,
+        name: document.getElementById('editName').value,
+        sku: document.getElementById('editSku').value,
+        category: document.getElementById('editCategory').value,
+        price: document.getElementById('editPrice').value,
+        stock: document.getElementById('editStock').value
+    };
+
+    try {
+        const response = await fetch(`${BASE_URL}/products.php`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updatedData)
+        });
+        const result = await response.json();
+        alert(result.message);
+
+        if (response.ok) {
+            closeEditModal();
+            fetchProducts();
+        }
+    } catch (err) { console.error(err); }
+}
+
+// ==========================================
+// 4. MODUŁ FAKTURY (DODAWANIE DO KOSZYKA)
+// ==========================================
 function populateProductSelect(products) {
     const select = document.getElementById('invProductSelect');
     select.innerHTML = '';
     products.forEach(p => {
         const option = document.createElement('option');
         option.value = p.id;
-        option.innerText = `${p.name} (Dostępne: ${p.stock} szt.) - ${p.price} PLN`;
+        option.innerText = `${p.name} (${p.stock} szt.) - ${p.price} PLN`;
         select.appendChild(option);
     });
 }
 
-// SEKCJA ADMINA: AKCEPTACJA PRACOWNIKÓW
+// TA FUNKCJA WRÓCIŁA NA SWOJE MIEJSCE!
+function addItemToInvoice() {
+    const select = document.getElementById('invProductSelect');
+    const productId = select.value;
+    const qty = parseInt(document.getElementById('invProductQty').value);
+
+    if (!productId || qty < 1) return;
+    const product = localProducts.find(p => p.id == productId);
+    if (!product) return;
+
+    if (qty > product.stock) {
+        alert(`Niewystarczający stan magazynowy! Maksymalnie dostępnych: ${product.stock}`);
+        return;
+    }
+
+    const existing = currentInvoiceItems.find(item => item.product_id == productId);
+    if (existing) {
+        if (existing.quantity + qty > product.stock) { 
+            alert("Łączna ilość w koszyku przekracza stan magazynowy!"); 
+            return; 
+        }
+        existing.quantity += qty;
+    } else {
+        currentInvoiceItems.push({ 
+            product_id: productId, 
+            name: product.name, 
+            quantity: qty, 
+            price: parseFloat(product.price) 
+        });
+    }
+    renderInvoiceItems();
+}
+
+function renderInvoiceItems() {
+    const list = document.getElementById('invoiceItemsList');
+    list.innerHTML = currentInvoiceItems.length === 0 ? '<li class="text-gray-400 italic text-center">Brak pozycji.</li>' : '';
+    currentInvoiceItems.forEach((item, index) => {
+        const li = document.createElement('li');
+        li.className = 'flex justify-between items-center bg-white p-1 rounded border border-gray-100';
+        li.innerHTML = `<span>${item.name} x <b>${item.quantity}</b></span><button type="button" onclick="removeItemFromInvoice(${index})" class="text-red-500 font-bold px-1 cursor-pointer">✕</button>`;
+        list.appendChild(li);
+    });
+}
+
+function removeItemFromInvoice(index) {
+    currentInvoiceItems.splice(index, 1);
+    renderInvoiceItems();
+}
+
+// ==========================================
+// 5. ZATWIERDZENIE FAKTURY I WYDRUK
+// ==========================================
+async function handleInvoiceSubmit(e) {
+    e.preventDefault();
+    if (currentInvoiceItems.length === 0) { alert("Koszyk faktury jest pusty!"); return; }
+
+    const invoiceData = {
+        client_name: document.getElementById('invClientName').value,
+        client_nip: document.getElementById('invClientNip').value || 'Brak NIP',
+        seller_id: currentUser.id,
+        items: currentInvoiceItems
+    };
+
+    try {
+        const response = await fetch(`${BASE_URL}/invoices.php`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(invoiceData)
+        });
+        
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            const printData = {
+                invoice_number: result.invoice_number,
+                client_name: result.client_name,
+                client_nip: result.client_nip,
+                seller_username: currentUser.username,
+                items: result.items
+            };
+
+            sessionStorage.setItem('invoice_to_print', JSON.stringify(printData));
+            window.open('print-invoice.html', '_blank');
+
+            document.getElementById('invoiceForm').reset();
+            currentInvoiceItems = [];
+            renderInvoiceItems();
+            fetchProducts();
+        } else {
+            alert(result.message || "Błąd podczas generowania faktury.");
+        }
+    } catch (err) { console.error(err); }
+}
+
+// ==========================================
+// 6. PANEL ADMINA: AKCEPTACJA PRACOWNIKÓW
+// ==========================================
 async function fetchUnapprovedUsers() {
     try {
         const response = await fetch(`${BASE_URL}/admin.php`);
         const users = await response.json();
         const list = document.getElementById('unapprovedUsersList');
         list.innerHTML = users.length === 0 ? '<li class="text-xs text-gray-400 italic py-2">Brak nowych zgłoszeń.</li>' : '';
-
         users.forEach(u => {
             const li = document.createElement('li');
             li.className = 'flex justify-between items-center py-2 text-sm';
-            li.innerHTML = `
-                <span>ID: <b>${u.id}</b> | User: <b>${u.username}</b></span>
-                <button onclick="approveUser(${u.id})" class="bg-blue-500 text-white text-xs px-2 py-1 rounded hover:bg-blue-600 cursor-pointer">Zatwierdź</button>
-            `;
+            li.innerHTML = `<span>User: <b>${u.username}</b></span><button onclick="approveUser(${u.id})" class="bg-blue-500 text-white text-xs px-2 py-1 rounded hover:bg-blue-600 cursor-pointer">Zatwierdź</button>`;
             list.appendChild(li);
         });
     } catch (err) { console.error(err); }
@@ -140,109 +288,6 @@ async function approveUser(userId) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: userId })
         });
-        if (response.ok) {
-            alert("Użytkownik zatwierdzony!");
-            fetchUnapprovedUsers();
-        }
+        if (response.ok) { fetchUnapprovedUsers(); }
     } catch (err) { console.error(err); }
-}
-
-// SEKCJA SPRZEDAWCY: KOSZYK I FAKTURY
-function addItemToInvoice() {
-    const select = document.getElementById('invProductSelect');
-    const productId = select.value;
-    const qty = parseInt(document.getElementById('invProductQty').value);
-
-    if (!productId || qty < 1) return;
-
-    const product = localProducts.find(p => p.id == productId);
-    if (!product) return;
-
-    if (qty > product.stock) {
-        alert(`Błąd! Nie masz tylu sztuk na magazynie. Maksymalnie: ${product.stock}`);
-        return;
-    }
-
-    const existingItem = currentInvoiceItems.find(item => item.product_id == productId);
-    if (existingItem) {
-        if (existingItem.quantity + qty > product.stock) {
-            alert("Łączna ilość przekracza stan magazynowy!");
-            return;
-        }
-        existingItem.quantity += qty;
-    } else {
-        currentInvoiceItems.push({
-            product_id: productId,
-            name: product.name,
-            quantity: qty
-        });
-    }
-
-    renderInvoiceItems();
-}
-
-function renderInvoiceItems() {
-    const list = document.getElementById('invoiceItemsList');
-    list.innerHTML = currentInvoiceItems.length === 0 ? '<li class="text-gray-400 italic text-center">Brak dodanych pozycji.</li>' : '';
-
-    currentInvoiceItems.forEach((item, index) => {
-        const li = document.createElement('li');
-        li.className = 'flex justify-between items-center bg-white p-1 rounded border border-gray-100';
-        li.innerHTML = `
-            <span>${item.name} x <b>${item.quantity}</b></span>
-            <button type="button" onclick="removeItemFromInvoice(${index})" class="text-red-500 font-bold hover:text-red-700 px-1 cursor-pointer">✕</button>
-        `;
-        list.appendChild(li);
-    });
-}
-
-function removeItemFromInvoice(index) {
-    currentInvoiceItems.splice(index, 1);
-    renderInvoiceItems();
-}
-
-async function handleInvoiceSubmit(e) {
-    e.preventDefault();
-    if (currentInvoiceItems.length === 0) {
-        alert("Dodaj przynajmniej jeden produkt do faktury!");
-        return;
-    }
-
-    const invoiceData = {
-        client_name: document.getElementById('invClientName').value,
-        client_nip: document.getElementById('invClientNip').value,
-        seller_id: currentUser.id,
-        items: currentInvoiceItems
-    };
-
-    try {
-        const response = await fetch(`${BASE_URL}/invoices.php`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(invoiceData)
-        });
-        const result = await response.json();
-
-        alert(result.message);
-
-        if (response.ok) {
-            document.getElementById('invoiceForm').reset();
-            currentInvoiceItems = [];
-            renderInvoiceItems();
-            fetchProducts(); // Aktualizuje stany magazynowe w locie!
-        }
-    } catch (err) { console.error(err); }
-}
-
-// SORTOWANIE
-function sortProducts(field) {
-    if (currentSort.field === field) { currentSort.asc = !currentSort.asc; } 
-    else { currentSort.field = field; currentSort.asc = true; }
-
-    localProducts.sort((a, b) => {
-        let valA = field === 'price' ? parseFloat(a[field]) : a[field].toLowerCase();
-        let valB = field === 'price' ? parseFloat(b[field]) : b[field].toLowerCase();
-        return valA < valB ? (currentSort.asc ? -1 : 1) : (valA > valB ? (currentSort.asc ? 1 : -1) : 0);
-    });
-    renderProductsTable(localProducts);
 }
