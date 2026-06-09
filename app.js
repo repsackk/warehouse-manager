@@ -169,7 +169,6 @@ function populateProductSelect(products) {
     });
 }
 
-// TA FUNKCJA WRÓCIŁA NA SWOJE MIEJSCE!
 function addItemToInvoice() {
     const select = document.getElementById('invProductSelect');
     const productId = select.value;
@@ -225,9 +224,19 @@ async function handleInvoiceSubmit(e) {
     e.preventDefault();
     if (currentInvoiceItems.length === 0) { alert("Koszyk faktury jest pusty!"); return; }
 
+    // Pobranie wartości z nowych, rozbitych pól adresowych
+    const clientStreet = document.getElementById('invoiceClientStreet').value;
+    const clientHomeNumber = document.getElementById('invoiceClientHomeNumber').value;
+    const clientPostcode = document.getElementById('invoiceClientPostcode').value;
+    const clientCity = document.getElementById('invoiceClientCity').value;
+
     const invoiceData = {
         client_name: document.getElementById('invClientName').value,
         client_nip: document.getElementById('invClientNip').value || 'Brak NIP',
+        client_street: clientStreet,
+        client_home_number: clientHomeNumber,
+        client_postcode: clientPostcode,
+        client_city: clientCity,
         seller_id: currentUser.id,
         items: currentInvoiceItems
     };
@@ -245,6 +254,10 @@ async function handleInvoiceSubmit(e) {
             const printData = {
                 invoice_number: result.invoice_number,
                 client_name: result.client_name,
+                client_street: result.client_street,
+                client_home_number: result.client_home_number,
+                client_postcode: result.client_postcode,
+                client_city: result.client_city,
                 client_nip: result.client_nip,
                 seller_username: currentUser.username,
                 items: result.items

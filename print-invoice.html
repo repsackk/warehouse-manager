@@ -23,7 +23,7 @@
             <span class="text-xl">🖨️</span>
             <div>
                 <h4 class="font-bold text-blue-900 text-sm">Podgląd Wydruku Faktury v2.8</h4>
-                <p class="text-xs text-blue-700">Dostosowano wyliczenia: Cena z koszyka to kwota <b>Brutto</b>, a podatek VAT (23%) wyliczany jest jako 23% z kwoty Brutto (689.77 PLN dla 2999.00 PLN).</p>
+                <p class="text-xs text-blue-700">Dostosowano wyliczenia: Cena z koszyka to kwota <b>Brutto</b>, a podatek VAT (23%) wyliczany jest jako 23% z kwoty Brutto.</p>
             </div>
         </div>
         <button onclick="window.print()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition cursor-pointer shadow-xs">
@@ -40,8 +40,8 @@
                 <p class="text-base font-mono font-bold text-gray-600 mt-1">Nr: <span id="pdfInvNumber" class="text-gray-900 text-lg"></span></p>
             </div>
             <div class="text-right space-y-1 text-sm text-gray-600">
-                <p><b>Data wystawienia:</b> <span id="dateIssue">2026-06-09</span></p>
-                <p><b>Data sprzedaży:</b> <span id="dateSale">2026-06-09</span></p>
+                <p><b>Data wystawienia:</b> <span id="dateIssue"></span></p>
+                <p><b>Data sprzedaży:</b> <span id="dateSale"></span></p>
                 <p><b>Miejsce wystawienia:</b> Warszawa</p>
             </div>
         </div>
@@ -62,7 +62,7 @@
                 <h2 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Nabywca</h2>
                 <div class="text-sm space-y-0.5">
                     <p id="pdfInvClientName" class="font-bold text-base text-gray-900"></p>
-                    <p class="text-gray-500 italic" id="clientAddressStub">Pobieranie danych...</p>
+                    <p class="text-gray-600" id="clientAddressDisplay"></p>
                     <p id="pdfInvClientNip" class="text-gray-900 font-bold pt-1"></p>
                 </div>
             </div>
@@ -83,12 +83,11 @@
                     </tr>
                 </thead>
                 <tbody id="pdfInvItemsBody" class="divide-y divide-gray-200">
-                    </tbody>
+                </tbody>
             </table>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start mt-8 pt-4 border-t border-gray-200">
-            
             <div class="text-sm space-y-2 border border-gray-100 p-4 rounded-lg bg-gray-50/50 print:border-0 print:p-0 print:bg-transparent">
                 <h3 class="font-bold text-gray-700 text-xs uppercase tracking-wider">Warunki płatności</h3>
                 <p class="text-gray-600"><b>Forma płatności:</b> Przelew bankowy</p>
@@ -146,17 +145,26 @@
         if (!invoiceData) {
             document.body.innerHTML = '<div class="text-center p-10"><h1 class="text-red-500 font-black text-2xl">🚨 Błąd krytyczny sesji</h1><p class="text-gray-500 mt-2">Nie znaleziono danych transakcji.</p></div>';
         } else {
+            // Wstawianie podstawowych danych
             document.getElementById('pdfInvNumber').innerText = invoiceData.invoice_number;
             document.getElementById('pdfInvSeller').innerText = invoiceData.seller_username;
             document.getElementById('pdfSellerSignature').innerText = invoiceData.seller_username;
             document.getElementById('pdfInvClientName').innerText = invoiceData.client_name;
             document.getElementById('pdfClientNameSignature').innerText = invoiceData.client_name;
             
-            document.getElementById('clientAddressStub').innerText = `ul. Docelowa ${Math.floor(Math.random() * 88) + 1}, ${invoiceData.client_nip !== 'Brak NIP' ? '31-150 Kraków' : '📍 Klient Detaliczny'}`;
+            // LOGIKA ADRESU: Łączymy części adresu i wstawiamy do HTML
+            const addressParts = [
+                invoiceData.client_street ? `ul. ${invoiceData.client_street}` : '',
+                invoiceData.client_home_number,
+                invoiceData.client_postcode,
+                invoiceData.client_city
+            ].filter(Boolean).join(' ');
+            
+            document.getElementById('clientAddressDisplay').innerText = addressParts || 'Brak danych adresowych';
             document.getElementById('pdfInvClientNip').innerText = invoiceData.client_nip !== 'Brak NIP' ? `NIP: ${invoiceData.client_nip}` : 'Podatnik zwolniony z podawania NIP';
 
+            // Generowanie listy produktów
             const tbody = document.getElementById('pdfInvItemsBody');
-            
             let totalNettoSum = 0;
             let totalVatSum = 0;
             let totalBruttoSum = 0;
@@ -165,7 +173,6 @@
                 const priceBrutto = parseFloat(item.price || 0);
                 const quantity = parseInt(item.quantity || 0);
                 
-                // Dokładna formuła zgodna z życzeniem użytkownika:
                 const itemBrutto = priceBrutto * quantity;
                 const itemVatAmount = itemBrutto * 0.23;
                 const itemNetto = itemBrutto - itemVatAmount;
@@ -189,10 +196,10 @@
                 tbody.appendChild(row);
             });
 
+            // Podsumowania
             document.getElementById('pdfTotalNetto').innerText = totalNettoSum.toFixed(2);
             document.getElementById('pdfTotalVat').innerText = totalVatSum.toFixed(2);
             document.getElementById('pdfTotalBrutto').innerText = totalBruttoSum.toFixed(2);
-            
             document.getElementById('totalInWords').innerText = `${Math.floor(totalBruttoSum)} PLN i ${(totalBruttoSum % 1 * 100).toFixed(0)}/100 gr`;
 
             const today = new Date().toISOString().slice(0, 10);

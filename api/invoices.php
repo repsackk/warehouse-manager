@@ -33,10 +33,31 @@ if ($method === 'POST') {
         // Rozpoczynamy transakcję – albo wszystko się zapisze, albo nic
         $conn->beginTransaction();
 
+        // Budujemy pełny, profesjonalny adres kupującego z przesłanych pól składowych
+        $street = !empty($data['client_street']) ? $data['client_street'] : '';
+        $home_number = !empty($data['client_home_number']) ? $data['client_home_number'] : '';
+        $postcode = !empty($data['client_postcode']) ? $data['client_postcode'] : '';
+        $city = !empty($data['client_city']) ? $data['client_city'] : '';
+
+        // Składamy pełny adres w jedną czytelną całość dla bazy danych
+        $fullAddress = "";
+        if ($street) {
+            $fullAddress .= " ul. " . $street . " " . $home_number;
+        }
+        if ($postcode || $city) {
+            $fullAddress .= ($fullAddress ? ", " : "") . $postcode . " " . $city;
+        }
+
+        // Łączymy nazwę klienta z pełnym adresem do bezpiecznego zapisu w bazie
+        $clientFullInfo = $data['client_name'];
+        if (!empty($fullAddress)) {
+            $clientFullInfo .= " (" . $fullAddress . ")";
+        }
+
         // 1. Wstawienie nagłówka faktury do tabeli `invoices`
         $queryInvoice = "INSERT INTO invoices (client_name, client_nip, seller_id) VALUES (:client_name, :client_nip, :seller_id)";
         $stmtInvoice = $conn->prepare($queryInvoice);
-        $stmtInvoice->bindParam(':client_name', $data['client_name']);
+        $stmtInvoice->bindParam(':client_name', $clientFullInfo);
         $stmtInvoice->bindParam(':client_nip', $data['client_nip']);
         $stmtInvoice->bindParam(':seller_id', $data['seller_id']);
         $stmtInvoice->execute();
@@ -93,11 +114,15 @@ if ($method === 'POST') {
         // Wszystko przebiegło pomyślnie – zatwierdzamy zmiany w bazie
         $conn->commit();
 
-        // Zwracamy idealną strukturę JSON, jakiej oczekuje Twój plik app.js
+        // Zwracamy idealną strukturę JSON, przekazując rozbite pola bezpośrednio do pliku wydruku
         echo json_encode([
             "success" => true,
             "invoice_number" => $invoiceNumber,
             "client_name" => $data['client_name'],
+            "client_street" => $street,
+            "client_home_number" => $home_number,
+            "client_postcode" => $postcode,
+            "client_city" => $city,
             "client_nip" => $data['client_nip'],
             "items" => $data['items'],
             "message" => "Faktura została wystawiona pomyślnie!"
