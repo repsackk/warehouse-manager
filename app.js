@@ -11,6 +11,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginForm').addEventListener('submit', handleAuth);
     document.getElementById('invoiceForm').addEventListener('submit', handleInvoiceSubmit);
     document.getElementById('editForm').addEventListener('submit', handleEditSubmit);
+    
+    // Obsługa wyszukiwania (live search)
+    document.getElementById('productSearch').addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase();
+        const filtered = localProducts.filter(p => 
+            p.name.toLowerCase().includes(term) || 
+            p.sku.toLowerCase().includes(term)
+        );
+        renderProductsTable(filtered);
+    });
 });
 
 function setAuthAction(action) { authAction = action; }
@@ -37,7 +47,7 @@ function initApp() {
 }
 
 // ==========================================
-// 1. SYSTEM AUTORYZACJI (LOGOWANIE / REJESTRACJA)
+// 1. SYSTEM AUTORYZACJI
 // ==========================================
 async function handleAuth(e) {
     e.preventDefault();
@@ -69,7 +79,7 @@ function logout() {
 }
 
 // ==========================================
-// 2. OBSŁUGA MAGAZYNU (PRODUKTY)
+// 2. MAGAZYN I PRODUKTY
 // ==========================================
 async function fetchProducts() {
     try {
@@ -107,19 +117,25 @@ function renderProductsTable(products) {
 }
 
 // ==========================================
-// 3. EDYCJA PRODUKTÓW (MODAL DLA ADMINA)
+// 3. EDYCJA I DODAWANIE PRODUKTÓW
 // ==========================================
+function openAddModal() {
+    document.getElementById('editForm').reset();
+    document.getElementById('editId').value = ''; // Puste ID = nowy produkt
+    document.getElementById('modalTitle').innerText = 'Dodaj Nowy Produkt';
+    document.getElementById('editModal').classList.remove('hidden');
+}
+
 function openEditModal(productId) {
     const product = localProducts.find(p => p.id == productId);
     if (!product) return;
-
     document.getElementById('editId').value = product.id;
     document.getElementById('editName').value = product.name;
     document.getElementById('editSku').value = product.sku;
     document.getElementById('editCategory').value = product.category;
     document.getElementById('editPrice').value = product.price;
     document.getElementById('editStock').value = product.stock;
-
+    document.getElementById('modalTitle').innerText = 'Edytuj Produkt';
     document.getElementById('editModal').classList.remove('hidden');
 }
 
@@ -129,9 +145,8 @@ function closeEditModal() {
 
 async function handleEditSubmit(e) {
     e.preventDefault();
-
-    const updatedData = {
-        id: document.getElementById('editId').value,
+    const id = document.getElementById('editId').value;
+    const productData = {
         name: document.getElementById('editName').value,
         sku: document.getElementById('editSku').value,
         category: document.getElementById('editCategory').value,
@@ -139,24 +154,24 @@ async function handleEditSubmit(e) {
         stock: document.getElementById('editStock').value
     };
 
+    // Jeśli id istnieje = PUT (edycja), jeśli puste = POST (dodawanie)
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `${BASE_URL}/products.php?id=${id}` : `${BASE_URL}/products.php`;
+
     try {
-        const response = await fetch(`${BASE_URL}/products.php`, {
-            method: 'PUT',
+        const response = await fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updatedData)
+            body: JSON.stringify(productData)
         });
         const result = await response.json();
         alert(result.message);
-
-        if (response.ok) {
-            closeEditModal();
-            fetchProducts();
-        }
+        if (response.ok) { closeEditModal(); fetchProducts(); }
     } catch (err) { console.error(err); }
 }
 
 // ==========================================
-// 4. MODUŁ FAKTURY (DODAWANIE DO KOSZYKA)
+// 4. MODUŁ FAKTURY
 // ==========================================
 function populateProductSelect(products) {
     const select = document.getElementById('invProductSelect');
@@ -185,18 +200,10 @@ function addItemToInvoice() {
 
     const existing = currentInvoiceItems.find(item => item.product_id == productId);
     if (existing) {
-        if (existing.quantity + qty > product.stock) { 
-            alert("Łączna ilość w koszyku przekracza stan magazynowy!"); 
-            return; 
-        }
+        if (existing.quantity + qty > product.stock) { alert("Łączna ilość w koszyku przekracza stan!"); return; }
         existing.quantity += qty;
     } else {
-        currentInvoiceItems.push({ 
-            product_id: productId, 
-            name: product.name, 
-            quantity: qty, 
-            price: parseFloat(product.price) 
-        });
+        currentInvoiceItems.push({ product_id: productId, name: product.name, quantity: qty, price: parseFloat(product.price) });
     }
     renderInvoiceItems();
 }
@@ -217,26 +224,19 @@ function removeItemFromInvoice(index) {
     renderInvoiceItems();
 }
 
-// ==========================================
-// 5. ZATWIERDZENIE FAKTURY I WYDRUK
-// ==========================================
 async function handleInvoiceSubmit(e) {
     e.preventDefault();
     if (currentInvoiceItems.length === 0) { alert("Koszyk faktury jest pusty!"); return; }
 
-    // Pobranie wartości z nowych, rozbitych pól adresowych
-    const clientStreet = document.getElementById('invoiceClientStreet').value;
-    const clientHomeNumber = document.getElementById('invoiceClientHomeNumber').value;
-    const clientPostcode = document.getElementById('invoiceClientPostcode').value;
-    const clientCity = document.getElementById('invoiceClientCity').value;
-
     const invoiceData = {
         client_name: document.getElementById('invClientName').value,
         client_nip: document.getElementById('invClientNip').value || 'Brak NIP',
-        client_street: clientStreet,
-        client_home_number: clientHomeNumber,
-        client_postcode: clientPostcode,
-        client_city: clientCity,
+        // Rozbudowane dane adresowe
+        client_street: document.getElementById('invoiceClientStreet').value,
+        client_home_number: document.getElementById('invoiceClientHomeNumber').value,
+        client_postcode: document.getElementById('invoiceClientPostcode').value,
+        client_city: document.getElementById('invoiceClientCity').value,
+        
         seller_id: currentUser.id,
         items: currentInvoiceItems
     };
@@ -247,18 +247,19 @@ async function handleInvoiceSubmit(e) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(invoiceData)
         });
-        
         const result = await response.json();
 
         if (response.ok && result.success) {
             const printData = {
                 invoice_number: result.invoice_number,
                 client_name: result.client_name,
-                client_street: result.client_street,
-                client_home_number: result.client_home_number,
-                client_postcode: result.client_postcode,
-                client_city: result.client_city,
                 client_nip: result.client_nip,
+                // Przekazanie danych adresowych do druku
+                client_street: invoiceData.client_street,
+                client_home_number: invoiceData.client_home_number,
+                client_postcode: invoiceData.client_postcode,
+                client_city: invoiceData.client_city,
+                
                 seller_username: currentUser.username,
                 items: result.items
             };
@@ -277,7 +278,7 @@ async function handleInvoiceSubmit(e) {
 }
 
 // ==========================================
-// 6. PANEL ADMINA: AKCEPTACJA PRACOWNIKÓW
+// 5. PANEL ADMINA: AKCEPTACJA PRACOWNIKÓW
 // ==========================================
 async function fetchUnapprovedUsers() {
     try {

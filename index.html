@@ -20,7 +20,7 @@
         <div class="container mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
             
             <div class="lg:col-span-1">
-                <form id="invoiceForm" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                <form id="invoiceForm" class="bg-white p-4 lg:p-5 rounded-lg shadow-sm border border-gray-200 max-w-full overflow-hidden">
                     <h2 class="text-xl font-bold mb-4 text-gray-800">Wystaw Fakturę</h2>
                     
                     <div class="space-y-4">
@@ -39,13 +39,13 @@
                                 <input type="text" id="invoiceClientStreet" class="w-full mt-1 p-2 border border-gray-300 rounded outline-none">
                             </div>
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Nr domu / lokalu</label>
+                                <label class="block text-sm font-medium text-gray-700">Nr domu</label>
                                 <input type="text" id="invoiceClientHomeNumber" class="w-full mt-1 p-2 border border-gray-300 rounded outline-none">
                             </div>
                         </div>
                         <div class="grid grid-cols-3 gap-4">
                             <div>
-                                <label class="block text-sm font-medium text-gray-700">Kod pocztowy</label>
+                                <label class="block text-sm font-medium text-gray-700">Kod</label>
                                 <input type="text" id="invoiceClientPostcode" placeholder="00-000" class="w-full mt-1 p-2 border border-gray-300 rounded outline-none">
                             </div>
                             <div class="col-span-2">
@@ -59,14 +59,14 @@
 
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700">Dodaj produkt</label>
-                        <div class="flex gap-2 mt-1">
-                            <select id="invProductSelect" class="flex-1 p-2 border border-gray-300 rounded outline-none"></select>
+                        <div class="flex flex-wrap gap-2 mt-1">
+                            <select id="invProductSelect" class="flex-1 min-w-0 p-2 border border-gray-300 rounded outline-none"></select>
                             <input type="number" id="invProductQty" value="1" min="1" class="w-20 p-2 border border-gray-300 rounded outline-none">
                             <button type="button" onclick="addItemToInvoice()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 cursor-pointer font-bold">+</button>
                         </div>
                     </div>
 
-                    <ul id="invoiceItemsList" class="space-y-2 mb-6">
+                    <ul id="invoiceItemsList" class="space-y-2 mb-6 max-h-64 overflow-y-auto overflow-x-hidden break-words">
                         <li class="text-gray-400 italic text-center">Brak pozycji.</li>
                     </ul>
 
@@ -78,7 +78,13 @@
 
             <div class="lg:col-span-2 space-y-6">
                 <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <h2 class="text-xl font-bold mb-4 text-gray-800">Magazyn</h2>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-800">Magazyn</h2>
+                        <button onclick="openAddModal()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700 cursor-pointer">Dodaj Produkt</button>
+                    </div>
+                    
+                    <input type="text" id="productSearch" placeholder="🔍 Szukaj produktu (nazwa lub SKU)..." class="w-full mb-4 p-2 border border-gray-300 rounded outline-none">
+
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead><tr class="border-b text-gray-500 text-sm">
@@ -100,13 +106,13 @@
 
     <div id="editModal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4">
         <form id="editForm" class="bg-white p-6 rounded shadow-lg w-full max-w-sm">
-            <h2 class="text-lg font-bold mb-4">Edytuj produkt</h2>
+            <h2 id="modalTitle" class="text-lg font-bold mb-4">Edytuj produkt</h2>
             <input type="hidden" id="editId">
-            <input type="text" id="editName" class="w-full mb-2 p-2 border rounded">
-            <input type="text" id="editSku" class="w-full mb-2 p-2 border rounded">
-            <input type="text" id="editCategory" class="w-full mb-2 p-2 border rounded">
-            <input type="number" id="editPrice" step="0.01" class="w-full mb-2 p-2 border rounded">
-            <input type="number" id="editStock" class="w-full mb-4 p-2 border rounded">
+            <input type="text" id="editName" placeholder="Nazwa" required class="w-full mb-2 p-2 border rounded">
+            <input type="text" id="editSku" placeholder="SKU" required class="w-full mb-2 p-2 border rounded">
+            <input type="text" id="editCategory" placeholder="Kategoria" class="w-full mb-2 p-2 border rounded">
+            <input type="number" id="editPrice" step="0.01" placeholder="Cena" required class="w-full mb-2 p-2 border rounded">
+            <input type="number" id="editStock" placeholder="Stan magazynowy" required class="w-full mb-4 p-2 border rounded">
             <div class="flex gap-2">
                 <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Zapisz</button>
                 <button type="button" onclick="closeEditModal()" class="bg-gray-300 px-4 py-2 rounded">Anuluj</button>
